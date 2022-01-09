@@ -14,6 +14,15 @@ namespace Project1
 {
     public class UploadTimeEntries
     {
+        //List src:
+        //https://csharp.hotexamples.com/examples/Npgsql/NpgsqlCommand/-/php-npgsqlcommand-class-examples.html
+        //https://zetcode.com/csharp/postgresql/    
+        //https://stackoverflow.com/questions/3876456/find-the-inner-most-exception-without-using-a-while-loop
+
+        //List pending feature:
+        //bikin config file terpisah, utk letak success/fail ftp, ambil data tasknya dsbnya
+        //bikin feature utk generate data txtnya.
+
         public static void Main(string[] args)
         {
             
@@ -28,9 +37,9 @@ namespace Project1
                 inputDt = args[0].Trim();
             }
 
-            bool isInput = false;
-            if (!string.IsNullOrEmpty(inputDt) && DateTime.TryParse(inputDt, out dateTime))
-                isInput = true;
+            //bool isInput = false;
+            if (!string.IsNullOrEmpty(inputDt) && DateTime.TryParse(inputDt, out dateTime)) ;
+                //isInput = true;
 
             //Console.WriteLine($"Date to be process : {dateTime.ToLongDateString()}");
             //string descrIsInput = isInput ? "yes" : "no";
@@ -132,16 +141,15 @@ namespace Project1
 
                 if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId))
                 {
-                    //client = new RestClient("https://api.clockify.me/api/v1/workspaces/" + workspaceId + "/time-entries");
-                    //client.Timeout = -1;
-                    //var request3 = new RestRequest(Method.POST);
-                    //request3.AddHeader("X-Api-Key", apiKey);
-                    //request3.AddHeader("Content-Type", "application/json");
-                    //var body = entry;
-                    //request3.AddParameter("application/json", JsonConvert.SerializeObject(body), ParameterType.RequestBody);
+                    client = new RestClient("https://api.clockify.me/api/v1/workspaces/" + workspaceId + "/time-entries");
+                    client.Timeout = -1;
+                    var request3 = new RestRequest(Method.POST);
+                    request3.AddHeader("X-Api-Key", apiKey);
+                    request3.AddHeader("Content-Type", "application/json");
+                    var body = entry;
+                    request3.AddParameter("application/json", JsonConvert.SerializeObject(body), ParameterType.RequestBody);
 
-                    //IRestResponse response3 = client.Execute(request3);
-                    //Console.WriteLine(response3.Content);
+                    IRestResponse response3 = client.Execute(request3);
 
                     Int32 unixTimestamp = (Int32)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
 

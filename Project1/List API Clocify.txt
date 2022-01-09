@@ -1,0 +1,23 @@
+curl -H "content-type: application/json" -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi" -X GET https://api.clockify.me/api/v1/workspaces
+
+curl -H "content-type: application/json" -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi" -X GET https://api.clockify.me/api/v1/workspaces/5e8de5a66cc9656a9f5a9b7f/projects
+
+curl -H "content-type: application/json" -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi" -X GET https://api.clockify.me/api/v1/workspaces/5e8de5a66cc9656a9f5a9b7f/projects/5ec20516bfc4317888f1d4fe/tasks
+
+curl -H "content-type: application/json" -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi" -X GET https://api.clockify.me/api/v1/user
+
+curl -H "content-type: application/json" -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi" -X GET https://api.clockify.me/api/v1/workspaces/5e8de5a66cc9656a9f5a9b7f/user/5ed1225d8952133b6da1f058/time-entries
+
+curl -X POST https://api.clockify.me/api/v1/workspaces/5e8de5a66cc9656a9f5a9b7f/time-entries
+   -H 'Content-Type: application/json'
+   -H "X-Api-Key: Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi"
+   -d '{
+  "start": "2022-01-07T02:00:00Z",
+  "billable": "false",
+  "description": "test",
+  "projectId": "5f3f649f49bc085b7e0e49cf",
+  "taskId": null,
+  "end": "2022-01-07T11:00:00Z",
+  "tagIds": null,
+  "customFields": []
+}'
