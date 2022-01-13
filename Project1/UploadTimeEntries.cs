@@ -9,6 +9,8 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using Npgsql;
+using System.Configuration;
+using System.Collections.Specialized;
 
 namespace Project1
 {
@@ -20,37 +22,33 @@ namespace Project1
         //https://stackoverflow.com/questions/3876456/find-the-inner-most-exception-without-using-a-while-loop
 
         //List pending feature:
-        //bikin config file terpisah, utk letak success/fail ftp, ambil data tasknya dsbnya
-        //bikin feature utk generate data txtnya.
 
         public static void Main(string[] args)
         {
-            
+            var clocifyApiSettings = ConfigurationManager.GetSection("clocifyApiSettings") as NameValueCollection;
+            string apiKey = ConfigurationManager.AppSettings["apiKey"].ToString();
+            string pathSourceTaskFile = ConfigurationManager.AppSettings["pathSourceTaskFile"].ToString();
+            var ftpSettings = ConfigurationManager.GetSection("ftpSettings") as NameValueCollection;
+            string ftpPath = ftpSettings["path"];
+            string ftpUsername = ftpSettings["username"];
+            string ftpPassword = ftpSettings["password"];
+
             DateTime dateTime = DateTime.Now;
 
-            //Console.WriteLine("Enter date of entry in format MM/DD/YYYY: ");    
-            //string inputDt = Console.ReadLine();
             string inputDt = "";
 
             if (args.Length > 0)
             {
-                inputDt = args[0].Trim();
+                inputDt = args[0].Trim(); //MM/DD/YYYY
             }
 
-            //bool isInput = false;
             if (!string.IsNullOrEmpty(inputDt) && DateTime.TryParse(inputDt, out dateTime)) ;
-                //isInput = true;
 
-            //Console.WriteLine($"Date to be process : {dateTime.ToLongDateString()}");
-            //string descrIsInput = isInput ? "yes" : "no";
-            //Console.WriteLine($"and it was from input : {descrIsInput}");
-
-            string apiKey = "Nzc0Y2E2N2UtZTUzMS00OWViLWE3OTYtNTQ5MWYxY2IxOWVi";
             string workspaceId;
             string projectId;
 
-            string nameFile = dateTime.ToLongDateString();
-            string path = String.Format("C:\\Task\\{0}.txt", nameFile);
+            string nameFile = dateTime.ToLongDateString() + ".txt";
+            string path = String.Format(pathSourceTaskFile, nameFile);
 
             bool statusEntry = false;
             string message = "";
@@ -62,14 +60,11 @@ namespace Project1
                     throw new Exception("Data Already Exists");
                 }
 
-                // Get the object used to communicate with the server.
-                FtpWebRequest request5 = (FtpWebRequest)WebRequest.Create("ftp://localhost/clocify/" + nameFile + ".txt");
+                FtpWebRequest request5 = (FtpWebRequest)WebRequest.Create(String.Format(ftpPath, nameFile));
                 request5.Method = WebRequestMethods.Ftp.UploadFile;
 
-                // This example assumes the FTP site uses anonymous logon.
-                request5.Credentials = new NetworkCredential("clocify", "P@ssw0rd.123");
+                request5.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
 
-                // Copy the contents of the file to the request stream.
                 byte[] fileContents;
                 using (StreamReader sourceStream = new StreamReader(path))
                 {
@@ -88,8 +83,6 @@ namespace Project1
                     //Console.WriteLine($"Upload File Complete, status {response5.StatusDescription}");
                 }
 
-                // Read each line of the file into a string array. Each element
-                // of the array is one line of the file.
                 string[] lines = System.IO.File.ReadAllLines(path);
 
                 if (lines.Length == 0)
@@ -97,35 +90,16 @@ namespace Project1
                     throw new Exception("File Not Found in " + path.ToString());
                 }
 
-                // Display the file contents by using a foreach loop.
                 string content = "";
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    string line = lines[i].Trim(); 
-                    // Use a tab to indent each line of the file.
-                    //Console.WriteLine("\t" + line);
+                    string line = lines[i].Trim();
                     content = content + line + "; ";
                 }
 
-                var client = new RestClient("https://api.clockify.me/api/v1/workspaces");
-                client.Timeout = -1;
-                var request = new RestRequest(Method.GET);
-                request.AddHeader("X-Api-Key", apiKey);
-                var response = client.Execute<List<Workspace>>(request);
-                //Console.WriteLine(response.Data[0].Id);
+                workspaceId = GetWorkspaceId(apiKey, clocifyApiSettings);
+                projectId = GetProjectId(apiKey, clocifyApiSettings, workspaceId);
 
-                workspaceId = response.Data[0].Id;
-
-                client = new RestClient("https://api.clockify.me/api/v1/workspaces/"+ workspaceId + "/projects");
-                client.Timeout = -1;
-                request = new RestRequest(Method.GET);
-                request.AddHeader("X-Api-Key", apiKey);
-                var response2 = client.Execute<List<Project>>(request);
-                //Console.WriteLine(response2.Data.Where(x => x.Name == "CIMP:AdIns").First().Id);
-
-                projectId = response2.Data.Where(x => x.Name == "CIMP:AdIns").First().Id;
-
-                //assign year, month, day, hour, min, seconds
                 DateTime startDateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, 9, 0, 0);
                 DateTime endDateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, 18, 0, 0);
 
@@ -133,7 +107,7 @@ namespace Project1
                 {
                     Start = startDateTime.ToUniversalTime().ToString("o"),
                     End = endDateTime.ToUniversalTime().ToString("o"),
-                    ProjectId = response2.Data.Where(x => x.Name == "CIMP:AdIns").First().Id,
+                    ProjectId = projectId,
                     TaskId = null,
                     Billable = "false",
                     Description = content
@@ -141,23 +115,14 @@ namespace Project1
 
                 if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId))
                 {
-                    client = new RestClient("https://api.clockify.me/api/v1/workspaces/" + workspaceId + "/time-entries");
-                    client.Timeout = -1;
-                    var request3 = new RestRequest(Method.POST);
-                    request3.AddHeader("X-Api-Key", apiKey);
-                    request3.AddHeader("Content-Type", "application/json");
-                    var body = entry;
-                    request3.AddParameter("application/json", JsonConvert.SerializeObject(body), ParameterType.RequestBody);
-
-                    IRestResponse response3 = client.Execute(request3);
+                    InsertNewEntry(apiKey, clocifyApiSettings, workspaceId, entry);
 
                     Int32 unixTimestamp = (Int32)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
 
-                    //pending feature, move to ftp success
-                    FtpWebRequest request4 = (FtpWebRequest)WebRequest.Create("ftp://localhost/clocify/" + nameFile + ".txt");
+                    FtpWebRequest request4 = (FtpWebRequest)WebRequest.Create(String.Format(ftpPath, nameFile));
                     request4.Method = WebRequestMethods.Ftp.Rename;
-                    request4.Credentials = new NetworkCredential("clocify", "P@ssw0rd.123");
-                    request4.RenameTo = "./Success/" + unixTimestamp.ToString() + "_" + nameFile + ".txt";   //Relative path 
+                    request4.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+                    request4.RenameTo = "./Success/" + unixTimestamp.ToString() + "_" + nameFile;   //Relative path 
                     FtpWebResponse response4 = (FtpWebResponse)request4.GetResponse();
                     statusEntry = true;
                 }
@@ -173,7 +138,70 @@ namespace Project1
             }
 
             string strEntryStatus = statusEntry ? "INS" : "ERR";
-            insertHist(dateTime, nameFile, strEntryStatus, message);   
+            InsertHist(dateTime, nameFile, strEntryStatus, message);
+
+            GenerateFile(dateTime);
+        }
+
+        public static void GenerateFile(DateTime trxDt)
+        {
+            DateTime nextDay = trxDt.AddDays(1);
+            string path = ConfigurationManager.AppSettings["pathSourceTaskFile"].ToString();
+            string nameFile = nextDay.ToLongDateString();
+            string fileName = String.Format(path, nameFile);
+
+            try
+            {
+                // Check if file already exists. If yes, delete it.     
+                if (File.Exists(fileName))
+                {
+                    File.Delete(fileName);
+                }
+
+                // Create a new file     
+                using (StreamWriter sw = File.CreateText(fileName))
+                {
+                    sw.WriteLine("1.");
+                }
+            }
+            catch (Exception Ex)
+            {
+                Console.WriteLine(Ex.ToString());
+            }
+        }
+
+        public static void InsertNewEntry(string apiKey, NameValueCollection nameValueCollection, string workspaceId, Entry entry)
+        {
+            var client = new RestClient(String.Format(nameValueCollection["APIInsertEntry"], workspaceId));
+            client.Timeout = -1;
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("X-Api-Key", apiKey);
+            request.AddHeader("Content-Type", "application/json");
+            var body = entry;
+            request.AddParameter("application/json", JsonConvert.SerializeObject(body), ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+        }
+
+        public static string GetProjectId(string apiKey, NameValueCollection nameValueCollection, string workspaceId)
+        {
+
+            var client = new RestClient(String.Format(nameValueCollection["APIGetProject"], workspaceId));
+            client.Timeout = -1;
+            var request = new RestRequest(Method.GET);
+            request.AddHeader("X-Api-Key", apiKey);
+            var response = client.Execute<List<Project>>(request);
+            return response.Data.Where(x => x.Name == "CIMP:AdIns").First().Id;
+        }
+
+        public static string GetWorkspaceId(string apiKey, NameValueCollection nameValueCollection)
+        {
+            var client = new RestClient(nameValueCollection["APIGetWorkspace"]);
+            client.Timeout = -1;
+            var request = new RestRequest(Method.GET);
+            request.AddHeader("X-Api-Key", apiKey);
+            var response = client.Execute<List<Workspace>>(request);
+            return response.Data[0].Id;
         }
 
         public static string GetExceptionMessages(Exception ex)
@@ -186,63 +214,51 @@ namespace Project1
         public static bool checkDataAlreadyExistOrNot(DateTime trxDt)
         {
             bool flag = false;
-            string strConnString = "Server=localhost;Port=5432;User Id=postgres;Password=P@ssw0rd.123;Database=Clockify";
-            try
-            {
-                NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
-                objConn.Open();
-                string strSelectCmd = "select * from UploadHist where status != 'ERR' and TrxUploadDate = @TrxUploadDate";
-                NpgsqlCommand cmd = new NpgsqlCommand(strSelectCmd, objConn);
-                cmd.Parameters.AddWithValue("@TrxUploadDate", trxDt);
-                NpgsqlDataReader dRead = cmd.ExecuteReader();
+            string strConnString = ConfigurationManager.AppSettings["connString"].ToString();
+            NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
+            objConn.Open();
+            string strSelectCmd = "select * from UploadHist where status != 'ERR' and TrxUploadDate = @TrxUploadDate";
+            NpgsqlCommand cmd = new NpgsqlCommand(strSelectCmd, objConn);
+            cmd.Parameters.AddWithValue("@TrxUploadDate", trxDt);
+            NpgsqlDataReader dRead = cmd.ExecuteReader();
 
-                while (dRead.Read())
+            while (dRead.Read())
+            {
+                if (dRead.FieldCount > 0)
                 {
-                    if (dRead.FieldCount > 0)
-                    {
-                        flag = true;
-                    }
+                    flag = true;
                 }
-
-                objConn.Close();
-            }
-            catch (Exception ex)
-            {
-
             }
 
+            objConn.Close();
             return flag;
         }
 
-        public static void insertHist(DateTime trxDt, string fileName, string status = "INS", string message = "")
+        public static void InsertHist(DateTime trxDt, string fileName, string status = "INS", string message = "")
         {
-            string strConnString = "Server=localhost;Port=5432;User Id=postgres;Password=P@ssw0rd.123;Database=Clockify";
-            try
-            {
-                NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
-                objConn.Open();
-                string strInsertCmd = "INSERT INTO UploadHist(TrxUploadDate,FileName,DtmCrt,UploadStatus)VALUES(:TrxUploadDate,:FileName,:DtmCrt,:UploadStatus)";
-                NpgsqlCommand cmd = new NpgsqlCommand(strInsertCmd, objConn);
+            string strConnString = ConfigurationManager.AppSettings["connString"].ToString();
+            NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
+            objConn.Open();
+            string strInsertCmd = "INSERT INTO UploadHist(TrxUploadDate,FileName,DtmCrt,UploadStatus)VALUES(:TrxUploadDate,:FileName,:DtmCrt,:UploadStatus, :Message)";
+            NpgsqlCommand cmd = new NpgsqlCommand(strInsertCmd, objConn);
 
-                NpgsqlParameter param1 = new NpgsqlParameter(":TrxUploadDate", NpgsqlTypes.NpgsqlDbType.Date);
-                param1.Value = trxDt;
-                cmd.Parameters.Add(param1);
-                NpgsqlParameter param2 = new NpgsqlParameter(":FileName", NpgsqlTypes.NpgsqlDbType.Varchar, 200);
-                param2.Value = fileName;
-                cmd.Parameters.Add(param2);
-                NpgsqlParameter param3 = new NpgsqlParameter(":DtmCrt", NpgsqlTypes.NpgsqlDbType.Date);
-                param3.Value = DateTime.Now;
-                cmd.Parameters.Add(param3);
-                NpgsqlParameter param4 = new NpgsqlParameter(":UploadStatus", NpgsqlTypes.NpgsqlDbType.Varchar, 100);
-                param4.Value = status;
-                cmd.Parameters.Add(param4);
-                cmd.ExecuteNonQuery();
-                objConn.Close();
-            }
-            catch (Exception ex)
-            {
-
-            }
+            NpgsqlParameter param1 = new NpgsqlParameter(":TrxUploadDate", NpgsqlTypes.NpgsqlDbType.Date);
+            param1.Value = trxDt;
+            cmd.Parameters.Add(param1);
+            NpgsqlParameter param2 = new NpgsqlParameter(":FileName", NpgsqlTypes.NpgsqlDbType.Varchar, 200);
+            param2.Value = fileName;
+            cmd.Parameters.Add(param2);
+            NpgsqlParameter param3 = new NpgsqlParameter(":DtmCrt", NpgsqlTypes.NpgsqlDbType.Date);
+            param3.Value = DateTime.Now;
+            cmd.Parameters.Add(param3);
+            NpgsqlParameter param4 = new NpgsqlParameter(":UploadStatus", NpgsqlTypes.NpgsqlDbType.Varchar, 100);
+            param4.Value = status;
+            cmd.Parameters.Add(param4);
+            NpgsqlParameter param5 = new NpgsqlParameter(":Message", NpgsqlTypes.NpgsqlDbType.Varchar);
+            param5.Value = message;
+            cmd.Parameters.Add(param5);
+            cmd.ExecuteNonQuery();
+            objConn.Close();
         }
     }
 }
