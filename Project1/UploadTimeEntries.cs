@@ -25,13 +25,11 @@ namespace Project1
 
         public static void Main(string[] args)
         {
-            var clocifyApiSettings = ConfigurationManager.GetSection("clocifyApiSettings") as NameValueCollection;
             string apiKey = ConfigurationManager.AppSettings["apiKey"].ToString();
             string pathSourceTaskFile = ConfigurationManager.AppSettings["pathSourceTaskFile"].ToString();
-            var ftpSettings = ConfigurationManager.GetSection("ftpSettings") as NameValueCollection;
-            string ftpPath = ftpSettings["path"];
-            string ftpUsername = ftpSettings["username"];
-            string ftpPassword = ftpSettings["password"];
+            string ftpPath = ConfigurationManager.AppSettings["path"].ToString();
+            string ftpUsername = ConfigurationManager.AppSettings["username"].ToString();
+            string ftpPassword = ConfigurationManager.AppSettings["password"].ToString();
 
             DateTime dateTime = DateTime.Now;
 
@@ -97,8 +95,8 @@ namespace Project1
                     content = content + line + "; ";
                 }
 
-                workspaceId = GetWorkspaceId(apiKey, clocifyApiSettings);
-                projectId = GetProjectId(apiKey, clocifyApiSettings, workspaceId);
+                workspaceId = GetWorkspaceId(apiKey);
+                projectId = GetProjectId(apiKey, workspaceId);
 
                 DateTime startDateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, 9, 0, 0);
                 DateTime endDateTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, 18, 0, 0);
@@ -115,7 +113,7 @@ namespace Project1
 
                 if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId))
                 {
-                    InsertNewEntry(apiKey, clocifyApiSettings, workspaceId, entry);
+                    InsertNewEntry(apiKey, workspaceId, entry);
 
                     Int32 unixTimestamp = (Int32)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
 
@@ -147,7 +145,7 @@ namespace Project1
         {
             DateTime nextDay = trxDt.AddDays(1);
             string path = ConfigurationManager.AppSettings["pathSourceTaskFile"].ToString();
-            string nameFile = nextDay.ToLongDateString();
+            string nameFile = nextDay.ToLongDateString()+".txt";
             string fileName = String.Format(path, nameFile);
 
             try
@@ -170,9 +168,10 @@ namespace Project1
             }
         }
 
-        public static void InsertNewEntry(string apiKey, NameValueCollection nameValueCollection, string workspaceId, Entry entry)
+        public static void InsertNewEntry(string apiKey, string workspaceId, Entry entry)
         {
-            var client = new RestClient(String.Format(nameValueCollection["APIInsertEntry"], workspaceId));
+            string APIGetWorkspace = ConfigurationManager.AppSettings["APIInsertEntry"].ToString();
+            var client = new RestClient(String.Format(APIGetWorkspace, workspaceId));
             client.Timeout = -1;
             var request = new RestRequest(Method.POST);
             request.AddHeader("X-Api-Key", apiKey);
@@ -183,10 +182,10 @@ namespace Project1
             IRestResponse response = client.Execute(request);
         }
 
-        public static string GetProjectId(string apiKey, NameValueCollection nameValueCollection, string workspaceId)
+        public static string GetProjectId(string apiKey, string workspaceId)
         {
-
-            var client = new RestClient(String.Format(nameValueCollection["APIGetProject"], workspaceId));
+            string APIGetWorkspace = ConfigurationManager.AppSettings["APIGetProject"].ToString();
+            var client = new RestClient(String.Format(APIGetWorkspace, workspaceId));
             client.Timeout = -1;
             var request = new RestRequest(Method.GET);
             request.AddHeader("X-Api-Key", apiKey);
@@ -194,9 +193,10 @@ namespace Project1
             return response.Data.Where(x => x.Name == "CIMP:AdIns").First().Id;
         }
 
-        public static string GetWorkspaceId(string apiKey, NameValueCollection nameValueCollection)
+        public static string GetWorkspaceId(string apiKey)
         {
-            var client = new RestClient(nameValueCollection["APIGetWorkspace"]);
+            string APIGetWorkspace = ConfigurationManager.AppSettings["APIGetWorkspace"].ToString();
+            var client = new RestClient(APIGetWorkspace);
             client.Timeout = -1;
             var request = new RestRequest(Method.GET);
             request.AddHeader("X-Api-Key", apiKey);
@@ -217,7 +217,7 @@ namespace Project1
             string strConnString = ConfigurationManager.AppSettings["connString"].ToString();
             NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
             objConn.Open();
-            string strSelectCmd = "select * from UploadHist where status != 'ERR' and TrxUploadDate = @TrxUploadDate";
+            string strSelectCmd = "select * from UploadHist where uploadStatus != 'ERR' and TrxUploadDate = @TrxUploadDate";
             NpgsqlCommand cmd = new NpgsqlCommand(strSelectCmd, objConn);
             cmd.Parameters.AddWithValue("@TrxUploadDate", trxDt);
             NpgsqlDataReader dRead = cmd.ExecuteReader();
@@ -239,7 +239,7 @@ namespace Project1
             string strConnString = ConfigurationManager.AppSettings["connString"].ToString();
             NpgsqlConnection objConn = new NpgsqlConnection(strConnString);
             objConn.Open();
-            string strInsertCmd = "INSERT INTO UploadHist(TrxUploadDate,FileName,DtmCrt,UploadStatus)VALUES(:TrxUploadDate,:FileName,:DtmCrt,:UploadStatus, :Message)";
+            string strInsertCmd = "INSERT INTO UploadHist(TrxUploadDate,FileName,DtmCrt,UploadStatus,Message)VALUES(:TrxUploadDate,:FileName,:DtmCrt,:UploadStatus, :Message)";
             NpgsqlCommand cmd = new NpgsqlCommand(strInsertCmd, objConn);
 
             NpgsqlParameter param1 = new NpgsqlParameter(":TrxUploadDate", NpgsqlTypes.NpgsqlDbType.Date);
